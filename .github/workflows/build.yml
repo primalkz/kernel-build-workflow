@@ -1,0 +1,51 @@
+name: Build CachyOS Kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: Upstream ref to build
+        required: false
+        default: master
+      processor_opt:
+        description: Kernel CPU target
+        required: false
+        default: generic_v3
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm archlinux-keyring
+          pacman -S --noconfirm \
+            base-devel git sudo perl bc cpio gettext libelf pahole python rust rust-bindgen rust-src pacman-contrib \
+            tar xz zstd clang llvm lld curl patch flex bison rsync kmod inetutils xmlto openssl
+
+      - name: Create builder user
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Apply workflow input overrides
+        run: |
+          sed -i "s|^UPSTREAM_REF=.*|UPSTREAM_REF=${{ github.event.inputs.upstream_ref }}|" config/build.env
+          sed -i "s|^PROCESSOR_OPT=.*|PROCESSOR_OPT=${{ github.event.inputs.processor_opt }}|" config/build.env
+
+      - name: Build packages
+        run: sudo -u builder bash -lc "cd '$GITHUB_WORKSPACE' && ./scripts/build-kernel.sh"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-cachyos-bore-lto-${{ github.run_number }}
+          path: |
+            out/*.pkg.tar.zst
+            out/*.pkg.tar.zst.sig
