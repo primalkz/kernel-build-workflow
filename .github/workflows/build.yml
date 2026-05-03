@@ -11,9 +11,45 @@ on:
         description: Kernel CPU target
         required: false
         default: generic_v3
+  schedule:
+    - cron: '0 0 */5 * *'
 
 jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_build: ${{ steps.check.outputs.needs_build }}
+      upstream_hash: ${{ steps.check.outputs.upstream_hash }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tracking
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Check upstream for changes
+        id: check
+        run: |
+          upstream_hash=$(git ls-remote https://github.com/CachyOS/linux-cachyos.git HEAD | awk '{print $1}')
+
+          last_built=""
+          if [[ -f .tracking/last-built-commit ]]; then
+            last_built=$(cat .tracking/last-built-commit)
+          fi
+
+          echo "upstream=$upstream_hash last_built=$last_built"
+
+          if [[ "$upstream_hash" == "$last_built" ]]; then
+            echo "needs_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "upstream_hash=$upstream_hash" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: check-upstream
+    if: needs.check-upstream.outputs.needs_build == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
@@ -35,6 +71,7 @@ jobs:
           chown -R builder:builder "$GITHUB_WORKSPACE"
 
       - name: Apply workflow input overrides
+        if: github.event_name == 'workflow_dispatch'
         run: |
           sed -i "s|^UPSTREAM_REF=.*|UPSTREAM_REF=${{ github.event.inputs.upstream_ref }}|" config/build.env
           sed -i "s|^PROCESSOR_OPT=.*|PROCESSOR_OPT=${{ github.event.inputs.processor_opt }}|" config/build.env
@@ -49,3 +86,15 @@ jobs:
           path: |
             out/*.pkg.tar.zst
             out/*.pkg.tar.zst.sig
+
+      - name: Update tracking branch
+        if: github.event_name == 'schedule'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B tracking
+          mkdir -p .tracking
+          echo "${{ needs.check-upstream.outputs.upstream_hash }}" > .tracking/last-built-commit
+          git add .tracking/last-built-commit
+          git commit -m "tracking: update last-built-commit"
+          git push --force origin tracking

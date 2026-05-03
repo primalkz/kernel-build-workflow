@@ -59,6 +59,10 @@ fi
 set_pkgbuild_var() {
   local key="$1"
   local value="$2"
+  if ! grep -q ": \"\\\${${key}:=" "$pkgbuild"; then
+    echo "PKGBUILD variable '${key}' not found (upstream may have renamed it)" >&2
+    exit 1
+  fi
   perl -0pi -e "s/: \"\\\$\\{$key:=.*?\\}\"/: \"\\\$\\{$key:=$value\\}\"/g" "$pkgbuild"
 }
 
