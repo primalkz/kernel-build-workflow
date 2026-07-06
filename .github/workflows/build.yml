@@ -54,15 +54,16 @@ jobs:
       image: archlinux:base-devel
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
       - name: Install build dependencies
         run: |
           pacman -Syu --noconfirm archlinux-keyring
           pacman -S --noconfirm \
             base-devel git sudo perl bc cpio gettext libelf pahole python rust rust-bindgen rust-src pacman-contrib \
             tar xz zstd clang llvm lld curl patch flex bison rsync kmod inetutils xmlto openssl
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Create builder user
         run: |
