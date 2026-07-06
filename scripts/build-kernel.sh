@@ -97,6 +97,11 @@ if [[ "$MAKEPKG_SYNCDEPS" == "yes" ]]; then
   makepkg_args+=(--syncdeps)
 fi
 
+# upstream validpgpkeys: Peter Jung, Eric Naim (CachyOS)
+for key in E8B9AA39F054E30E8290D492C3C4820857F654FE E18447AC260021D31F3FF6C4C8A2A4774B8B63C4; do
+  gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys "$key"
+done
+
 cd "$pkg_dir"
 env -u CI -u GITHUB_RUN_ID makepkg "${makepkg_args[@]}" --nobuild
 
