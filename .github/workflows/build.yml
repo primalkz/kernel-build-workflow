@@ -23,10 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: tracking
           fetch-depth: 1
-          token: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
 
       - name: Check upstream for changes
         id: check
@@ -34,8 +31,8 @@ jobs:
           upstream_hash=$(git ls-remote https://github.com/CachyOS/linux-cachyos.git HEAD | awk '{print $1}')
 
           last_built=""
-          if [[ -f .tracking/last-built-commit ]]; then
-            last_built=$(cat .tracking/last-built-commit)
+          if git fetch --depth 1 origin tracking 2>/dev/null; then
+            last_built=$(git show FETCH_HEAD:.tracking/last-built-commit 2>/dev/null || true)
           fi
 
           echo "upstream=$upstream_hash last_built=$last_built"
@@ -51,6 +48,8 @@ jobs:
     needs: check-upstream
     if: needs.check-upstream.outputs.needs_build == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     container:
       image: archlinux:base-devel
 
@@ -87,11 +86,28 @@ jobs:
             out/*.pkg.tar.zst
             out/*.pkg.tar.zst.sig
 
+      - name: Sync upstream bore dir
+        if: github.event_name == 'schedule'
+        run: |
+          git config user.name "primalkz"
+          git config user.email "44187697+primalkz@users.noreply.github.com"
+          git clone --depth=1 https://github.com/CachyOS/linux-cachyos.git /tmp/upstream
+          rm -rf upstream/linux-cachyos-bore
+          mkdir -p upstream
+          cp -a /tmp/upstream/linux-cachyos-bore upstream/
+          git add upstream/linux-cachyos-bore
+          if git diff --cached --quiet; then
+            echo "no upstream changes to sync"
+          else
+            git commit -m "upstream: sync linux-cachyos-bore @ ${{ needs.check-upstream.outputs.upstream_hash }}"
+            git push origin master
+          fi
+
       - name: Update tracking branch
         if: github.event_name == 'schedule'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "primalkz"
+          git config user.email "44187697+primalkz@users.noreply.github.com"
           git checkout -B tracking
           mkdir -p .tracking
           echo "${{ needs.check-upstream.outputs.upstream_hash }}" > .tracking/last-built-commit
