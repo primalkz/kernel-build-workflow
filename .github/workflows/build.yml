@@ -14,6 +14,10 @@ on:
   schedule:
     - cron: '0 0 */5 * *'
 
+concurrency:
+  group: build-cachyos-kernel
+  cancel-in-progress: true
+
 jobs:
   check-upstream:
     runs-on: ubuntu-latest
@@ -21,7 +25,7 @@ jobs:
       needs_build: ${{ steps.check.outputs.needs_build }}
       upstream_hash: ${{ steps.check.outputs.upstream_hash }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
@@ -63,7 +67,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Create builder user
         run: |
@@ -72,15 +76,18 @@ jobs:
 
       - name: Apply workflow input overrides
         if: github.event_name == 'workflow_dispatch'
+        env:
+          UPSTREAM_REF: ${{ github.event.inputs.upstream_ref }}
+          PROCESSOR_OPT: ${{ github.event.inputs.processor_opt }}
         run: |
-          sed -i "s|^UPSTREAM_REF=.*|UPSTREAM_REF=${{ github.event.inputs.upstream_ref }}|" config/build.env
-          sed -i "s|^PROCESSOR_OPT=.*|PROCESSOR_OPT=${{ github.event.inputs.processor_opt }}|" config/build.env
+          sed -i "s|^UPSTREAM_REF=.*|UPSTREAM_REF=$UPSTREAM_REF|" config/build.env
+          sed -i "s|^PROCESSOR_OPT=.*|PROCESSOR_OPT=$PROCESSOR_OPT|" config/build.env
 
       - name: Build packages
         run: sudo -u builder bash -lc "cd '$GITHUB_WORKSPACE' && ./scripts/build-kernel.sh"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: linux-cachyos-bore-lto-${{ github.run_number }}
           path: |
@@ -101,6 +108,7 @@ jobs:
             echo "no upstream changes to sync"
           else
             git commit -m "upstream: sync linux-cachyos-bore @ ${{ needs.check-upstream.outputs.upstream_hash }}"
+            git pull --rebase origin master
             git push origin master
           fi
 
@@ -109,7 +117,8 @@ jobs:
         run: |
           git config user.name "primalkz"
           git config user.email "44187697+primalkz@users.noreply.github.com"
-          git checkout -B tracking
+          git checkout --orphan tracking
+          git rm -rf --cached . >/dev/null 2>&1 || true
           mkdir -p .tracking
           echo "${{ needs.check-upstream.outputs.upstream_hash }}" > .tracking/last-built-commit
           git add .tracking/last-built-commit

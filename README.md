@@ -31,7 +31,7 @@ Not enabled by default:
 - AutoFDO
 - Propeller
 
-Those are a separate upstream build lane. If you want them later, retarget `UPSTREAM_SUBDIR` to the relevant upstream package directory and verify its PKGBUILD knobs before building.
+Upstream ships these only on the default `linux-cachyos` package (EEVDF), not on `linux-cachyos-bore`. They need a profile file from a two-pass build (build, profile a real workload with `perf record`, rebuild with the profile), and that profile is CPU-specific. A profile captured on a GitHub Actions runner would be tuned to the runner's CPU, not yours, so the payoff is thin.
 
 Upstream base:
 
@@ -64,7 +64,7 @@ Use `patches/*.patch` only for concrete issues you can name.
 
 ## Usage
 
-Push this repo to GitHub, then run the `Build CachyOS Kernel` workflow manually from the Actions tab.
+Run the `Build CachyOS Kernel` workflow from the Actions tab (manual `workflow_dispatch`), or run it on the `0 0 */5 * *` schedule (every 5 days at midnight UTC). Manual runs let you override `upstream_ref` and `processor_opt`. Scheduled runs build whatever upstream `master` points at.
 
 The workflow uploads package artifacts from `out/` as GitHub Actions artifacts.
 
@@ -80,7 +80,16 @@ Then regenerate boot entries if needed:
 sudo grub-mkconfig -o /boot/grub/grub.cfg
 ```
 
+### Scheduled Builds And Upstream Sync
+
+On the 5-day schedule, `check-upstream` compares CachyOS's `linux-cachyos` HEAD against the hash on the `tracking` branch and skips the build if they match. After a successful build, two steps run:
+
+- `Sync upstream bore dir` mirrors `linux-cachyos-bore/` into `upstream/linux-cachyos-bore/` on `master`.
+- `Update tracking branch` records the built hash on `tracking` for the next comparison.
+
+Both are skipped on manual `workflow_dispatch` runs.
+
 ## Sources
 
 - CachyOS kernel repo: https://github.com/CachyOS/linux-cachyos
-- CachyOS README on compiler variants and architecture tiers: https://github.com/CachyOS/linux-cachyos
+- CachyOS kernel wiki: https://wiki.cachyos.org/features/kernel
