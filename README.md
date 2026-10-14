@@ -66,7 +66,7 @@ Use `patches/*.patch` only for concrete issues you can name.
 
 Run the `Build CachyOS Kernel` workflow from the Actions tab (manual `workflow_dispatch`), or run it on the `0 0 */5 * *` schedule (every 5 days at midnight UTC). Manual runs let you override `upstream_ref` and `processor_opt`. Scheduled runs build whatever upstream `master` points at.
 
-The workflow uploads package artifacts from `out/` as GitHub Actions artifacts.
+The workflow uploads package artifacts from `out/` as GitHub Actions artifacts and publishes them as a GitHub release for the run, so builds are easy to find later without digging through workflow runs.
 
 On your Arch system, install the resulting packages with:
 

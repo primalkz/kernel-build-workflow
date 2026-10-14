@@ -94,6 +94,34 @@ jobs:
             out/*.pkg.tar.zst
             out/*.pkg.tar.zst.sig
 
+      - name: Determine release tag
+        id: release_tag
+        run: echo "tag=$(echo "$GITHUB_SHA" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: ${{ steps.release_tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            Automated CachyOS BORE kernel build for commit ${{ github.sha }}.
+
+            Packages: `linux-cachyos-bore-lto`, `linux-cachyos-bore-lto-headers`
+            CPU target: `generic_v3`
+            LTO: `thin`
+
+            Install with:
+
+            ```bash
+            sudo pacman -U ./linux-cachyos-bore-lto-*.pkg.tar.zst ./linux-cachyos-bore-lto-headers-*.pkg.tar.zst
+            ```
+          files: |
+            out/*.pkg.tar.zst
+            out/*.pkg.tar.zst.sig
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+
       - name: Sync upstream bore dir
         if: github.event_name == 'schedule'
         run: |
